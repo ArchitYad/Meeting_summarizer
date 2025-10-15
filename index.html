@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎯 Meeting Summarizer</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>🎧 Meeting Summarizer</h1>
+    <form action="/process" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".wav,.mp3,.m4a" required>
+      <button type="submit">Upload & Summarize</button>
+    </form>
+
+    {% if transcript %}
+      <div class="section">
+        <h2>📝 Transcript</h2>
+        <p>{{ transcript }}</p>
+      </div>
+    {% endif %}
+
+    {% if summary %}
+      <div class="section">
+        <h2>🧠 Summary</h2>
+        <p>{{ summary|safe }}</p>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>
