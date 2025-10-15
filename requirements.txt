@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+python-dotenv
+pydub
+groq
+google-generativeai
