@@ -1,6 +1,6 @@
 import os
 import tempfile
-from fastapi import FastAPI, Request, UploadFile, Form
+from fastapi import FastAPI, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -8,17 +8,18 @@ from dotenv import load_dotenv
 from groq import Groq
 import google.generativeai as genai
 from pydub import AudioSegment
+
 # Load API keys
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Init clients
+# Initialize clients
 groq_client = Groq(api_key=GROQ_API_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 
-# FastAPI init
+# FastAPI app
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -26,9 +27,11 @@ templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "transcript": None, "summary": None})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "transcript": None, "summary": None}
+    )
 
-from pydub import AudioSegment
 
 @app.post("/process", response_class=HTMLResponse)
 async def process_audio(request: Request, file: UploadFile):
@@ -41,22 +44,34 @@ async def process_audio(request: Request, file: UploadFile):
             temp_file.write(await file.read())
             temp_path = temp_file.name
 
-        # --- Convert to WAV if needed ---
+        # Convert to WAV if needed
         if not temp_path.endswith(".wav"):
             sound = AudioSegment.from_file(temp_path)
             wav_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             sound.export(wav_temp.name, format="wav")
-            temp_path = wav_temp.name  # Update path to WAV
+            temp_path = wav_temp.name
 
-        # 1️⃣ Transcribe with Whisper (Groq)
-        with open(temp_path, "rb") as f:
-            transcription = groq_client.audio.transcriptions.create(
-                file=(f.name, f.read()),
-                model="whisper-large-v3"
-            )
-        transcript_text = transcription.text
+        # --- Split audio into chunks (2 minutes each) ---
+        audio = AudioSegment.from_wav(temp_path)
+        chunk_length_ms = 2 * 60 * 1000  # 2 minutes
+        chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
 
-        # 2️⃣ Summarize with Gemini
+        # Transcribe each chunk
+        transcripts = []
+        for idx, chunk in enumerate(chunks):
+            chunk_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            chunk.export(chunk_file.name, format="wav")
+            with open(chunk_file.name, "rb") as f:
+                transcription = groq_client.audio.transcriptions.create(
+                    file=(f.name, f.read()),
+                    model="whisper-large-v3"
+                )
+            transcripts.append(transcription.text)
+
+        # Aggregate full transcript
+        transcript_text = "\n".join(transcripts)
+
+        # Summarize aggregated transcript
         prompt = f"""
         You are a professional meeting assistant.
         Summarize this transcript into:
@@ -67,15 +82,13 @@ async def process_audio(request: Request, file: UploadFile):
         Transcript:
         {transcript_text}
         """
-
         response = gemini_model.generate_content(prompt)
         summary_text = response.text
 
     except Exception as e:
         summary_text = f"❌ Error: {str(e)}"
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "transcript": transcript_text,
-        "summary": summary_text
-    })
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "transcript": transcript_text, "summary": summary_text}
+    )
