@@ -1,10 +1,10 @@
-# Use official Python image
-FROM python:3.13-slim
+# Use full Python image to avoid missing pyaudioop
+FROM python:3.13
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies including ffmpeg
+RUN apt-get update && \
+    apt-get install -y ffmpeg libasound2-dev build-essential && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -16,8 +16,8 @@ COPY . /app
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Expose the port that FastAPI uses
+# Expose port for FastAPI
 EXPOSE 10000
 
-# Start FastAPI
+# Start FastAPI app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
