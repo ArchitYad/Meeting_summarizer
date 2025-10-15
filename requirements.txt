@@ -6,3 +6,4 @@ python-dotenv
 pydub
 groq
 google-generativeai
+pyaudio
